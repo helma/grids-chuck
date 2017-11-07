@@ -368,8 +368,8 @@ http://www.arj.no/2013/10/18/bits/
   [ nodes[24], nodes[19], nodes[17], nodes[20], nodes[22] ]
 ] @=> int drum_map[][][];
 
-0 => float x;
-0 => float y;
+0 => int x;
+0 => int y;
 0 => int step;
 [0,0,0] @=>  int densities[];
 [47,51,61] @=>  int notes[];
@@ -382,7 +382,6 @@ http://www.arj.no/2013/10/18/bits/
 32 => int steps_per_pattern;
 0 => int ticks;
 0 => int running;
-//0.5::second => dur step_dur;
 
 MidiIn sc4_in;   
 MidiMsg sc4_in_msg;
@@ -394,14 +393,27 @@ if( !sc4_out.open( Std.atoi(me.arg(1)) ) ) me.exit();
 MidiMsg msg;
 176 => msg.data1;
 0 => msg.data2;
-(x*127) $ int => msg.data3;
+x => msg.data3;
 sc4_out.send(msg);
 1 => msg.data2;
-(y*127) $ int => msg.data3;
+y => msg.data3;
 sc4_out.send(msg);
 for (0=>int i;i<3;i++) {
   i+4 => msg.data2;
   densities[i]/2 => msg.data3;
+  sc4_out.send(msg);
+  // instruments
+  (i+1)*8 => msg.data2;
+  accent_velocities[i] => msg.data3;
+  sc4_out.send(msg);
+  (i+1)*8+4 => msg.data2;
+  velocities[i] => msg.data3;
+  sc4_out.send(msg);
+  (i+1)*8+1 => msg.data2;
+  accent_notes[i] => msg.data3;
+  sc4_out.send(msg);
+  (i+1)*8+5 => msg.data2;
+  notes[i] => msg.data3;
   sc4_out.send(msg);
 }
 
@@ -423,14 +435,13 @@ fun void note(int i,int n, int v) {
 }
 
 fun void read_drum_map() {
-// x,y 0..1, inst < 4, step < 32
-  Math.floor(3*x)$int => int i;
-  Math.floor(3*y)$int => int j;
-  (x*1024)$int%256 => int xx;
-  (y*1024)$int%256 => int yy;
+
+  Math.floor(3*x/127)$int => int i;
+  Math.floor(3*y/127)$int => int j;
+  (x*8)%255 => int xx;
+  (y*8)%255 => int yy;
   255-xx => int xx_inv;          
   255-yy => int yy_inv;
-  int levels[3];
 
   for (0 => int inst;inst<3;inst++) {
     (inst * steps_per_pattern) + step => int offset;
@@ -451,8 +462,8 @@ fun void read_drum_map() {
 
 fun void sync() {
   while (true) {
-    renoise_in => now;                 // wait on the event 'min'
-    while( renoise_in.recv(renoise_in_msg) ) {        // get the message(s)
+    renoise_in => now; 
+    while( renoise_in.recv(renoise_in_msg) ) { 
       if (renoise_in_msg.data1 == 250)   { 0 => ticks; 1 => running; }     // start
       else if (renoise_in_msg.data1 == 251)   { 1 => running; }     // continue
       else if (renoise_in_msg.data1 == 252)   { 0 => running; }     // stop
@@ -471,68 +482,40 @@ fun void sync() {
 }
 
 fun void sc4() {
-  // TODO send settings
   while (true) {
-    sc4_in => now;                 // wait on the event 'min'
+    sc4_in => now; 
     while( sc4_in.recv(sc4_in_msg) ) {        // get the message(s)
       if (sc4_in_msg.data1 == 176) {
         sc4_in_msg.data2/8 => int group;
         sc4_in_msg.data2%8 => int enc;
         sc4_in_msg.data3 => int val;
         if (group == 0) {
-          if (enc == 0) { val$float/127 => x; }
-          else if (enc == 1) { val$float/127 => y; }
+          if (enc == 0) { val => x; }
+          else if (enc == 1) { val => y; }
           else if (enc > 3 && enc < 7) { val*2 => densities[enc-4]; }
+        }
+        else if (group == 1) { // kick
+          if (enc == 0) { val => accent_velocities[0]; }
+          else if (enc == 1) { val => accent_notes[0]; }
+          else if (enc == 4) { val => velocities[0]; }
+          else if (enc == 5) { val => notes[0]; }
+        }
+        else if (group == 2) { // snr
+          if (enc == 0) { val => accent_velocities[1]; }
+          else if (enc == 1) { val => accent_notes[1]; }
+          else if (enc == 4) { val => velocities[1]; }
+          else if (enc == 5) { val => notes[1]; }
+        }
+        else if (group == 3) { // hh
+          if (enc == 0) { val => accent_velocities[2]; }
+          else if (enc == 1) { val => accent_notes[2]; }
+          else if (enc == 5) { val => notes[2]; }
+          else if (enc == 4) { val => velocities[2]; }
         }
       }
     }
-    //<<< sc4_in_msg.data1,sc4_in_msg.data2,sc4_in_msg.data3 >>>;
   }
 }
 
 spork ~ sc4();
 sync();
-/*
-
-void PatternGenerator::EvaluateDrums() {
-  // At the beginning of a pattern, decide on perturbation levels.
-  if (step_ == 0) {
-    for (uint8_t i = 0; i < kNumParts; ++i) {
-      uint8_t randomness = options_.swing
-          ? 0 : settings_.options.drums.randomness >> 2;
-      part_perturbation_[i] = U8U8MulShift8(Random::GetByte(), randomness);
-    }
-  }
-  
-  uint8_t instrument_mask = 1;
-  uint8_t x = settings_.options.drums.x;
-  uint8_t y = settings_.options.drums.y;
-  uint8_t accent_bits = 0;
-  for (uint8_t i = 0; i < kNumParts; ++i) {
-    uint8_t level = ReadDrumMap(step_, i, x, y);
-    if (level < 255 - part_perturbation_[i]) {
-      level += part_perturbation_[i];
-    } else {
-      // The sequencer from Anushri uses a weird clipping rule here. Comment
-      // this line to reproduce its behavior.
-      level = 255;
-    }
-    uint8_t threshold = ~settings_.density[i];
-    if (level > threshold) {
-      if (level > 192) {
-        accent_bits |= instrument_mask;
-      }
-      state_ |= instrument_mask;
-    }
-    instrument_mask <<= 1;
-  }
-  if (output_clock()) {
-    state_ |= accent_bits ? OUTPUT_BIT_COMMON : 0;
-    state_ |= step_ == 0 ? OUTPUT_BIT_RESET : 0;
-  } else {
-    state_ |= accent_bits << 3;
-  }
-}
-for i, p in enumerate(nodes):
-  drum_map_nodes.append(('%d' % i, p))
-*/
