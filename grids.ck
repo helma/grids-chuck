@@ -1,3 +1,12 @@
+/*
+https://mutable-instruments.net/modules/grids/manual/
+https://github.com/pichenettes/eurorack/tree/master/grids
+https://forum.mutable-instruments.net/t/understanding-code-grids-u8mix-and-bitshift-in-pattern-generator-cc/3862
+https://github.com/geertphg/MIdrum/blob/master/grids_resouces.ino
+https://en.wikipedia.org/wiki/Bilinear_interpolation
+http://www.arj.no/2013/10/18/bits/
+*/
+
 [
   [
     255, 0, 0, 0, 0, 0, 145, 0,
@@ -359,61 +368,131 @@
   [ nodes[24], nodes[19], nodes[17], nodes[20], nodes[22] ]
 ] @=> int drum_map[][][];
 
-fun int read_drum_map(float x, float y, int inst, int step) {
+0 => float x;
+0 => float y;
+0 => int step;
+[0,0,0] @=>  int densities[];
+[47,51,61] @=>  int notes[];
+[75,75,75] @=>  int velocities[];
+[48,50,58] @=>  int accent_notes[];
+[100,100,100] @=>  int accent_velocities[];
+// TODO
+//[Math.rand2(0,32),Math.rand2(0,32),Math.rand2(0,32)] @=>  int perturbations[];
+
+32 => int steps_per_pattern;
+0 => int ticks;
+0 => int running;
+//0.5::second => dur step_dur;
+
+MidiIn sc4_in;   
+MidiMsg sc4_in_msg;
+if( !sc4_in.open( Std.atoi(me.arg(0)) ) ) me.exit(); 
+MidiOut sc4_out;
+if( !sc4_out.open( Std.atoi(me.arg(1)) ) ) me.exit(); 
+
+// init SC4
+MidiMsg msg;
+176 => msg.data1;
+0 => msg.data2;
+(x*127) $ int => msg.data3;
+sc4_out.send(msg);
+1 => msg.data2;
+(y*127) $ int => msg.data3;
+sc4_out.send(msg);
+for (0=>int i;i<3;i++) {
+  i+4 => msg.data2;
+  densities[i]/2 => msg.data3;
+  sc4_out.send(msg);
+}
+
+MidiIn renoise_in; 
+MidiMsg renoise_in_msg; 
+if( !renoise_in.open( Std.atoi(me.arg(2)) ) ) me.exit();
+MidiOut renoise_out; 
+if( !renoise_out.open( Std.atoi(me.arg(3)) ) ) me.exit(); 
+
+fun void note(int i,int n, int v) {
+  MidiMsg msg;
+  0x80+i => msg.data1;
+  n => msg.data2;
+  0 => msg.data3;
+  renoise_out.send(msg);
+  0x90+i => msg.data1;
+  v => msg.data3;
+  renoise_out.send(msg);
+}
+
+fun void read_drum_map() {
 // x,y 0..1, inst < 4, step < 32
-/*
-https://github.com/pichenettes/eurorack/tree/master/grids
-https://forum.mutable-instruments.net/t/understanding-code-grids-u8mix-and-bitshift-in-pattern-generator-cc/3862
-https://github.com/geertphg/MIdrum/blob/master/grids_resouces.ino
-https://en.wikipedia.org/wiki/Bilinear_interpolation
-http://www.arj.no/2013/10/18/bits/
-*/
-  32 => int steps_per_pattern;
   Math.floor(3*x)$int => int i;
   Math.floor(3*y)$int => int j;
   (x*1024)$int%256 => int xx;
   (y*1024)$int%256 => int yy;
   255-xx => int xx_inv;          
   255-yy => int yy_inv;
-  (inst * steps_per_pattern) + step => int offset;
-  drum_map[i][j][offset] => int a;
-  drum_map[i+1][j][offset] => int b;
-  drum_map[i][j+1][offset] => int c;
-  drum_map[i+1][j+1][offset] => int d;
-  (xx*b + xx_inv*a)/255 => int ab;         // 16bit but 8bits shifted, so effectively only 8bit
-  (xx*d + xx_inv*c)/255 => int cd;
-  return (yy * cd + yy_inv * ab)/255 ;    
-}
+  int levels[3];
 
-fun void play() {
-  while (true) {
-		// wait for 16th
-		// At the beginning of a pattern, decide on perturbation levels.
-// compare density with threshold
-// set accent
+  for (0 => int inst;inst<3;inst++) {
+    (inst * steps_per_pattern) + step => int offset;
+    drum_map[i][j][offset] => int a;
+    drum_map[i+1][j][offset] => int b;
+    drum_map[i][j+1][offset] => int c;
+    drum_map[i+1][j+1][offset] => int d;
+    (xx*b + xx_inv*a)/255 => int ab;         // 16bit but 8bits shifted, so effectively only 8bit
+    (xx*d + xx_inv*c)/255 => int cd;
+    (yy * cd + yy_inv * ab)/255 => int level;    
+    // apply pertubation
+    if (level > 255-densities[inst]) {
+      note(inst,notes[inst],velocities[inst]);
+      if (level > 192) { note(inst,accent_notes[inst],accent_velocities[inst]); }
+    }
   }
 }
 
-//<<<read_drum_map(0,0,0,2)>>>;
-<<<read_drum_map(0.6,0.3,0,1)>>>;
-<<<read_drum_map(0.6,0.3,1,1)>>>;
-<<<read_drum_map(0.6,0.3,2,1)>>>;
-/*
-<<<read_drum_map(0,0,0,8)>>>;
-<<<read_drum_map(0.3,0.4,2,15)>>>;
-<<<read_drum_map(0.3,0.4,2,31)>>>;
-<<<read_drum_map(0.5,0.7,0,0)>>>;
-<<<read_drum_map(0.5,0.7,0,16)>>>;
-//read_drum_map(5,3,1,8);
-
-uint8_t PatternGenerator::ReadDrumMap(
-    uint8_t step,
-    uint8_t instrument,
-    uint8_t x,
-    uint8_t y) {
-  return U8Mix(U8Mix(a, b, x << 2), U8Mix(c, d, x << 2), y << 2);
+fun void sync() {
+  while (true) {
+    renoise_in => now;                 // wait on the event 'min'
+    while( renoise_in.recv(renoise_in_msg) ) {        // get the message(s)
+      if (renoise_in_msg.data1 == 250)   { 0 => ticks; 1 => running; }     // start
+      else if (renoise_in_msg.data1 == 251)   { 1 => running; }     // continue
+      else if (renoise_in_msg.data1 == 252)   { 0 => running; }     // stop
+      else if (renoise_in_msg.data1 == 248 && running)   {      // clock
+        if (ticks % 3 == 0) { // 32th 24 ppqn (pulses per quarter note)
+          read_drum_map();
+          (step+1) % steps_per_pattern => step;
+          //if (step == 0) { // At the beginning of a pattern, decide on perturbation levels.
+            //[Math.rand2(0,32),Math.rand2(0,32),Math.rand2(0,32)] @=> perturbations[];
+          //}
+        }
+        ticks++;
+      }
+    }
+  }
 }
 
+fun void sc4() {
+  // TODO send settings
+  while (true) {
+    sc4_in => now;                 // wait on the event 'min'
+    while( sc4_in.recv(sc4_in_msg) ) {        // get the message(s)
+      if (sc4_in_msg.data1 == 176) {
+        sc4_in_msg.data2/8 => int group;
+        sc4_in_msg.data2%8 => int enc;
+        sc4_in_msg.data3 => int val;
+        if (group == 0) {
+          if (enc == 0) { val$float/127 => x; }
+          else if (enc == 1) { val$float/127 => y; }
+          else if (enc > 3 && enc < 7) { val*2 => densities[enc-4]; }
+        }
+      }
+    }
+    //<<< sc4_in_msg.data1,sc4_in_msg.data2,sc4_in_msg.data3 >>>;
+  }
+}
+
+spork ~ sc4();
+sync();
+/*
 
 void PatternGenerator::EvaluateDrums() {
   // At the beginning of a pattern, decide on perturbation levels.
@@ -456,53 +535,4 @@ void PatternGenerator::EvaluateDrums() {
 }
 for i, p in enumerate(nodes):
   drum_map_nodes.append(('%d' % i, p))
-
-
-"""----------------------------------------------------------------------------
-Euclidean patterns
-----------------------------------------------------------------------------"""
-
-def Flatten(l):
-  if hasattr(l, 'pop'):
-    for item in l:
-      for j in Flatten(item):
-        yield j
-  else:
-    yield l
-
-
-def EuclidianPattern(k, n):
-  pattern = [[1]] * k + [[0]] * (n - k)
-  while k:
-    cut = min(k, len(pattern) - k)
-    k, pattern = cut, [pattern[i] + pattern[k + i] for i in xrange(cut)] + \
-      pattern[cut:k] + pattern[k + cut:]
-  return pattern
-
-
-table = []
-for num_steps in xrange(1, 33):
-  for num_notes in xrange(32):
-    num_notes = int(round(float(num_notes) / 31 * num_steps))
-    bitmask = 0
-    for i, bit in enumerate(Flatten(EuclidianPattern(num_notes, num_steps))):
-      if bit:
-        bitmask |= (1 << i)
-    table.append(bitmask)
-
-lookup_tables32 = [('euclidean', table)]
-
-
-
-"""----------------------------------------------------------------------------
-Phase increment for tempo.
-----------------------------------------------------------------------------"""
-
-control_rate = 8000
-width = 1 << 32
-tempo_values = numpy.arange(0, 512.0)
-lookup_tables32.append(
-    ('tempo_phase_increment', width * tempo_values * 8 / (60 * control_rate) / 2)
-)
-print len(drum_map[0][0])/3
 */
