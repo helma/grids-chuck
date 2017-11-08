@@ -394,7 +394,14 @@ if( !sc4_in.open( Std.atoi(me.arg(0)) ) ) me.exit();
 MidiOut sc4_out;
 if( !sc4_out.open( Std.atoi(me.arg(1)) ) ) me.exit(); 
 
-// init SC4
+MidiIn renoise_in; 
+MidiMsg renoise_in_msg; 
+if( !renoise_in.open( Std.atoi(me.arg(2)) ) ) me.exit();
+MidiOut renoise_out; 
+if( !renoise_out.open( Std.atoi(me.arg(3)) ) ) me.exit(); 
+
+// SC4 init
+
 MidiMsg msg;
 176 => msg.data1;
 0 => msg.data2;
@@ -403,12 +410,41 @@ sc4_out.send(msg);
 1 => msg.data2;
 y => msg.data3;
 sc4_out.send(msg);
+
 for (0=>int i;i<3;i++) {
 
+  // densities
   i+4 => msg.data2;
   densities[i]/2 => msg.data3;
   sc4_out.send(msg);
-  
+
+  // keys
+  (i+1)*8 => msg.data2;
+  Math.round(127*(accent_keys[i]+12)/23)$int => msg.data3;
+  sc4_out.send(msg);
+  (i+1)*8+4 => msg.data2;
+  Math.round(127*(keys[i]+12)/23)$int => msg.data3;
+  sc4_out.send(msg);
+
+  // attack
+  (i+1)*8+1 => msg.data2;
+  0 => msg.data3;
+  renoise_out.send(msg);
+  sc4_out.send(msg);
+  (i+1)*8+5 => msg.data2;
+  renoise_out.send(msg);
+  sc4_out.send(msg);
+
+  // decay
+  (i+1)*8+2 => msg.data2;
+  32 => msg.data3;
+  renoise_out.send(msg);
+  sc4_out.send(msg);
+  (i+1)*8+6 => msg.data2;
+  renoise_out.send(msg);
+  sc4_out.send(msg);
+
+  // velocities
   (i+1)*8+3 => msg.data2;
   accent_velocities[i] => msg.data3;
   sc4_out.send(msg);
@@ -416,7 +452,8 @@ for (0=>int i;i<3;i++) {
   velocities[i] => msg.data3;
   sc4_out.send(msg);
 
-  for (0=>int j;j<4;j++) {
+  // samples
+  for (0=>int j;j<4;j++) { 
     72+8*i+j => msg.data2;
     if (j == accent_samples[i]) { 127 => msg.data3; }
     else { 0 => msg.data3; }
@@ -426,28 +463,15 @@ for (0=>int i;i<3;i++) {
     else { 0 => msg.data3; }
     sc4_out.send(msg);
   }
-
-  (i+1)*8 => msg.data2;
-  Math.round(127*(accent_keys[i]+12)/23)$int => msg.data3;
-  sc4_out.send(msg);
-  (i+1)*8+4 => msg.data2;
-  Math.round(127*(keys[i]+12)/23)$int => msg.data3;
-  sc4_out.send(msg);
 }
-
-MidiIn renoise_in; 
-MidiMsg renoise_in_msg; 
-if( !renoise_in.open( Std.atoi(me.arg(2)) ) ) me.exit();
-MidiOut renoise_out; 
-if( !renoise_out.open( Std.atoi(me.arg(3)) ) ) me.exit(); 
 
 fun void accent(int i) {
   MidiMsg msg;
-  0x80+i => msg.data1;
+  0x80+2*i => msg.data1;
   lastaccent[i] => msg.data2;
   0 => msg.data3;
   renoise_out.send(msg);
-  0x90+i => msg.data1;
+  0x90+2*i => msg.data1;
   accent_samples[i]*24+24+accent_keys[i] => msg.data2;
   accent_velocities[i] => msg.data3;
   renoise_out.send(msg);
@@ -456,11 +480,11 @@ fun void accent(int i) {
 
 fun void ghost(int i) {
   MidiMsg msg;
-  0x80+i => msg.data1;
+  0x80+2*i+1 => msg.data1;
   lastghost[i] => msg.data2;
   0 => msg.data3;
   renoise_out.send(msg);
-  0x90+i => msg.data1;
+  0x90+2*i+1 => msg.data1;
   samples[i]*24+24+keys[i] => msg.data2;
   velocities[i] => msg.data3;
   renoise_out.send(msg);
@@ -530,21 +554,26 @@ fun void sc4() {
         }
         else if (group == 1) { // kick
           if (enc == 0) { Math.round(23*val/127-12)$int => accent_keys[0]; }
+          else if (enc < 3) { renoise_out.send(sc4_in_msg); } // attack, decay
           else if (enc == 3) { val => accent_velocities[0]; }
-          // TODO attack, decay
           else if (enc == 4) { Math.round(23*val/127-12)$int => keys[0]; }
+          else if (enc < 7) { renoise_out.send(sc4_in_msg); }
           else if (enc == 7) { val => velocities[0]; }
         }
         else if (group == 2) { // snr
           if (enc == 0) { Math.round(23*val/127-12)$int => accent_keys[1]; }
+          else if (enc < 3) { renoise_out.send(sc4_in_msg); }
           else if (enc == 3) { val => accent_velocities[1]; }
           else if (enc == 4) { Math.round(23*val/127-12)$int => keys[1]; }
+          else if (enc < 7) { renoise_out.send(sc4_in_msg); }
           else if (enc == 7) { val => velocities[1]; }
         }
         else if (group == 3) { // hh
           if (enc == 0) { Math.round(23*val/127-12)$int => accent_keys[2]; }
+          else if (enc < 3) { renoise_out.send(sc4_in_msg); }
           else if (enc == 3) { val => accent_velocities[2]; }
           else if (enc == 4) { Math.round(23*val/127-12)$int => keys[2]; }
+          else if (enc < 7) { renoise_out.send(sc4_in_msg); }
           else if (enc == 7) { val => velocities[2]; }
         }
         else if (group > 8 && group < 12) { // buttons
@@ -576,7 +605,6 @@ fun void sc4() {
             }
           }
         }
-        else { <<< group, enc, val >>>; }
       }
     }
   }
