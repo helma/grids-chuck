@@ -372,10 +372,15 @@ http://www.arj.no/2013/10/18/bits/
 0 => int y;
 0 => int step;
 [0,0,0] @=>  int densities[];
-[47,51,61] @=>  int notes[];
-[75,75,75] @=>  int velocities[];
-[48,50,58] @=>  int accent_notes[];
+[0,0,0] @=>  int accent_samples[];
+[0,0,0] @=>  int accent_keys[];
 [100,100,100] @=>  int accent_velocities[];
+[3,3,3] @=>  int samples[];
+[0,0,0] @=>  int keys[];
+[75,75,75] @=>  int velocities[];
+int lastghost[3];
+int lastaccent[3];
+
 // TODO
 //[Math.rand2(0,32),Math.rand2(0,32),Math.rand2(0,32)] @=>  int perturbations[];
 
@@ -399,21 +404,34 @@ sc4_out.send(msg);
 y => msg.data3;
 sc4_out.send(msg);
 for (0=>int i;i<3;i++) {
+
   i+4 => msg.data2;
   densities[i]/2 => msg.data3;
   sc4_out.send(msg);
-  // instruments
-  (i+1)*8 => msg.data2;
+  
+  (i+1)*8+3 => msg.data2;
   accent_velocities[i] => msg.data3;
   sc4_out.send(msg);
-  (i+1)*8+4 => msg.data2;
+  (i+1)*8+7 => msg.data2;
   velocities[i] => msg.data3;
   sc4_out.send(msg);
-  (i+1)*8+1 => msg.data2;
-  accent_notes[i] => msg.data3;
+
+  for (0=>int j;j<4;j++) {
+    72+8*i+j => msg.data2;
+    if (j == accent_samples[i]) { 127 => msg.data3; }
+    else { 0 => msg.data3; }
+    sc4_out.send(msg);
+    72+8*i+j+4 => msg.data2;
+    if (j == samples[i]) { 127 => msg.data3; }
+    else { 0 => msg.data3; }
+    sc4_out.send(msg);
+  }
+
+  (i+1)*8 => msg.data2;
+  Math.round(127*(accent_keys[i]+12)/23)$int => msg.data3;
   sc4_out.send(msg);
-  (i+1)*8+5 => msg.data2;
-  notes[i] => msg.data3;
+  (i+1)*8+4 => msg.data2;
+  Math.round(127*(keys[i]+12)/23)$int => msg.data3;
   sc4_out.send(msg);
 }
 
@@ -423,15 +441,30 @@ if( !renoise_in.open( Std.atoi(me.arg(2)) ) ) me.exit();
 MidiOut renoise_out; 
 if( !renoise_out.open( Std.atoi(me.arg(3)) ) ) me.exit(); 
 
-fun void note(int i,int n, int v) {
+fun void accent(int i) {
   MidiMsg msg;
   0x80+i => msg.data1;
-  n => msg.data2;
+  lastaccent[i] => msg.data2;
   0 => msg.data3;
   renoise_out.send(msg);
   0x90+i => msg.data1;
-  v => msg.data3;
+  accent_samples[i]*24+24+accent_keys[i] => msg.data2;
+  accent_velocities[i] => msg.data3;
   renoise_out.send(msg);
+  msg.data2 => lastaccent[i];
+}
+
+fun void ghost(int i) {
+  MidiMsg msg;
+  0x80+i => msg.data1;
+  lastghost[i] => msg.data2;
+  0 => msg.data3;
+  renoise_out.send(msg);
+  0x90+i => msg.data1;
+  samples[i]*24+24+keys[i] => msg.data2;
+  velocities[i] => msg.data3;
+  renoise_out.send(msg);
+  msg.data2 => lastghost[i];
 }
 
 fun void read_drum_map() {
@@ -454,8 +487,8 @@ fun void read_drum_map() {
     (yy * cd + yy_inv * ab)/255 => int level;    
     // apply pertubation
     if (level > 255-densities[inst]) {
-      note(inst,notes[inst],velocities[inst]);
-      if (level > 192) { note(inst,accent_notes[inst],accent_velocities[inst]); }
+      if (level > 192) { accent(inst); }
+      ghost(inst);
     }
   }
 }
@@ -484,34 +517,66 @@ fun void sync() {
 fun void sc4() {
   while (true) {
     sc4_in => now; 
-    while( sc4_in.recv(sc4_in_msg) ) {        // get the message(s)
+    while( sc4_in.recv(sc4_in_msg) ) { 
       if (sc4_in_msg.data1 == 176) {
         sc4_in_msg.data2/8 => int group;
         sc4_in_msg.data2%8 => int enc;
         sc4_in_msg.data3 => int val;
-        if (group == 0) {
+        if (group == 0) { // grids
           if (enc == 0) { val => x; }
           else if (enc == 1) { val => y; }
+          // TODO chaos
           else if (enc > 3 && enc < 7) { val*2 => densities[enc-4]; }
         }
         else if (group == 1) { // kick
-          if (enc == 0) { val => accent_velocities[0]; }
-          else if (enc == 1) { val => accent_notes[0]; }
-          else if (enc == 4) { val => velocities[0]; }
-          else if (enc == 5) { val => notes[0]; }
+          if (enc == 0) { Math.round(23*val/127-12)$int => accent_keys[0]; }
+          else if (enc == 3) { val => accent_velocities[0]; }
+          // TODO attack, decay
+          else if (enc == 4) { Math.round(23*val/127-12)$int => keys[0]; }
+          else if (enc == 7) { val => velocities[0]; }
         }
         else if (group == 2) { // snr
-          if (enc == 0) { val => accent_velocities[1]; }
-          else if (enc == 1) { val => accent_notes[1]; }
-          else if (enc == 4) { val => velocities[1]; }
-          else if (enc == 5) { val => notes[1]; }
+          if (enc == 0) { Math.round(23*val/127-12)$int => accent_keys[1]; }
+          else if (enc == 3) { val => accent_velocities[1]; }
+          else if (enc == 4) { Math.round(23*val/127-12)$int => keys[1]; }
+          else if (enc == 7) { val => velocities[1]; }
         }
         else if (group == 3) { // hh
-          if (enc == 0) { val => accent_velocities[2]; }
-          else if (enc == 1) { val => accent_notes[2]; }
-          else if (enc == 5) { val => notes[2]; }
-          else if (enc == 4) { val => velocities[2]; }
+          if (enc == 0) { Math.round(23*val/127-12)$int => accent_keys[2]; }
+          else if (enc == 3) { val => accent_velocities[2]; }
+          else if (enc == 4) { Math.round(23*val/127-12)$int => keys[2]; }
+          else if (enc == 7) { val => velocities[2]; }
         }
+        else if (group > 8 && group < 12) { // buttons
+          if (val == 127) {
+            group - 9 => int i;
+            if (enc < 4) { // accent
+              enc => accent_samples[i];
+              for (0=>int j;j<4;j++) {
+                if (j != enc) { // turn leds off
+                  MidiMsg msg;
+                  176 => msg.data1;
+                  8*group+j => msg.data2;
+                  0 => msg.data3;
+                  sc4_out.send(msg);
+                }
+              }
+            }
+            else { // ghost
+              enc-4 => samples[i];
+              for (0=>int j;j<4;j++) {
+                if (j != enc-4) { // turn leds off
+                  MidiMsg msg;
+                  176 => msg.data1;
+                  8*group+j+4 => msg.data2;
+                  0 => msg.data3;
+                  sc4_out.send(msg);
+                }
+              }
+            }
+          }
+        }
+        else { <<< group, enc, val >>>; }
       }
     }
   }
