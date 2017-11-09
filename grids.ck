@@ -368,9 +368,11 @@ http://www.arj.no/2013/10/18/bits/
   [ nodes[24], nodes[19], nodes[17], nodes[20], nodes[22] ]
 ] @=> int drum_map[][][];
 
-0 => int x;
-0 => int y;
+Math.random2(0,127) => int x;
+Math.random2(0,127) => int y;
+0 => int randomness;
 0 => int step;
+
 [0,0,0] @=>  int densities[];
 [0,0,0] @=>  int accent_samples[];
 [0,0,0] @=>  int accent_keys[];
@@ -378,11 +380,12 @@ http://www.arj.no/2013/10/18/bits/
 [3,3,3] @=>  int samples[];
 [0,0,0] @=>  int keys[];
 [75,75,75] @=>  int velocities[];
+
 int lastghost[3];
 int lastaccent[3];
 
 // TODO
-//[Math.rand2(0,32),Math.rand2(0,32),Math.rand2(0,32)] @=>  int perturbations[];
+[Math.random2(0,32),Math.random2(0,32),Math.random2(0,32)] @=>  int perturbations[];
 
 32 => int steps_per_pattern;
 0 => int ticks;
@@ -409,6 +412,9 @@ x => msg.data3;
 sc4_out.send(msg);
 1 => msg.data2;
 y => msg.data3;
+sc4_out.send(msg);
+2 => msg.data2;
+randomness/2 => msg.data3;
 sc4_out.send(msg);
 
 for (0=>int i;i<3;i++) {
@@ -506,10 +512,17 @@ fun void read_drum_map() {
     drum_map[i+1][j][offset] => int b;
     drum_map[i][j+1][offset] => int c;
     drum_map[i+1][j+1][offset] => int d;
-    (xx*b + xx_inv*a)/255 => int ab;         // 16bit but 8bits shifted, so effectively only 8bit
+    (xx*b + xx_inv*a)/255 => int ab;
     (xx*d + xx_inv*c)/255 => int cd;
     (yy * cd + yy_inv * ab)/255 => int level;    
     // apply pertubation
+    if (level < 255 - perturbations[i]) {
+      level + perturbations[i] => level;
+    } else {
+      // The sequencer from Anushri uses a weird clipping rule here. Comment
+      // this line to reproduce its behavior.
+      255 => level;
+    }
     if (level > 255-densities[inst]) {
       if (level > 192) { accent(inst); }
       ghost(inst);
@@ -528,9 +541,9 @@ fun void sync() {
         if (ticks % 3 == 0) { // 32th 24 ppqn (pulses per quarter note)
           read_drum_map();
           (step+1) % steps_per_pattern => step;
-          //if (step == 0) { // At the beginning of a pattern, decide on perturbation levels.
-            //[Math.rand2(0,32),Math.rand2(0,32),Math.rand2(0,32)] @=> perturbations[];
-          //}
+          if (step == 0) { // At the beginning of a pattern, decide on perturbation levels.
+            [Math.random2(0,randomness),Math.random2(0,randomness),Math.random2(0,randomness)] @=> perturbations;
+          }
         }
         ticks++;
       }
@@ -549,7 +562,7 @@ fun void sc4() {
         if (group == 0) { // grids
           if (enc == 0) { val => x; }
           else if (enc == 1) { val => y; }
-          // TODO chaos
+          else if (enc == 2) { val*2 => randomness; }
           else if (enc > 3 && enc < 7) { val*2 => densities[enc-4]; }
         }
         else if (group == 1) { // kick
