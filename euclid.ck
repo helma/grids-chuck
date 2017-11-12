@@ -42,7 +42,7 @@ public class Euclid {
       (step + offsets[i])%steps => int idx;
       if (patterns[i][idx]) {
         MidiMsg msg;
-        0x90 + 6 + i => msg.data1;
+        (0x90 + 6 + i/2)$int => msg.data1;
         if (note_rec) { lastnote[i] => notes[i][step]; }
         sc.scale(notes[i][note_step[i]],scale) => msg.data2;
         //sc.scale(notes[i][step],scale) => msg.data2;
