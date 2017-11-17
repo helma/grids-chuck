@@ -182,12 +182,12 @@ public class SC4 {
           }
           else if (group == 13) {
             if (in_msg.data3 == 127) {
-              if (enc < 4) { true => bass.arp.mutes[enc]; }
-              else { true => synth.arp.mutes[enc-4]; }
-            }
-            else if (in_msg.data3 == 0) {
               if (enc < 4) { false => bass.arp.mutes[enc]; }
               else { false => synth.arp.mutes[enc-4]; }
+            }
+            else if (in_msg.data3 == 0) {
+              if (enc < 4) { true => bass.arp.mutes[enc]; }
+              else { true => synth.arp.mutes[enc-4]; }
             }
           }
           //else { <<< group >>>; }
