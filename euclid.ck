@@ -22,7 +22,7 @@ public class Euclid {
   }
 
   fun int plays(int step) {
-    (step + offset)%steps => int idx;
+    (step + offset+steps)%steps => int idx;
     return pattern[idx];
   }
 

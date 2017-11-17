@@ -59,14 +59,6 @@ public class SC4 {
     renoise_out.send(msg);
     out.send(msg);
 
-    // velocities
-    (i+1)*8+3 => msg.data2;
-    grids.accent_velocities[i] => msg.data3;
-    out.send(msg);
-    (i+1)*8+7 => msg.data2;
-    grids.velocities[i] => msg.data3;
-    out.send(msg);
-
     // samples
     for (0=>int j;j<4;j++) { 
       72+8*i+j => msg.data2;
@@ -78,6 +70,32 @@ public class SC4 {
       else { 0 => msg.data3; }
       out.send(msg);
     }
+
+    // euclid
+    4*8 => msg.data2;
+    2*(bass.euclid.offset+32) => msg.data3;
+    out.send(msg);
+    4*8+1 => msg.data2;
+    2*(synth.euclid.offset+32) => msg.data3;
+    out.send(msg);
+    4*8+4 => msg.data2;
+    bass.euclid.pulses => msg.data3;
+    out.send(msg);
+    4*8+5 => msg.data2;
+    synth.euclid.pulses => msg.data3;
+    out.send(msg);
+
+    // arp
+    5*8 => int cc;
+    for (int i;i < bass.arp.notes.cap();i++) {
+      cc + i => msg.data2;
+      bass.arp.notes[i] => msg.data3;
+      out.send(msg);
+      cc + i + 4 => msg.data2;
+      synth.arp.notes[i] => msg.data3;
+      out.send(msg);
+    }
+
   }
 
   fun void sc4() {
@@ -85,9 +103,11 @@ public class SC4 {
       in => now; 
       while( in.recv(in_msg) ) { 
         if (in_msg.data1 == 176) {
+
           in_msg.data2/8 => int group;
           in_msg.data2%8 => int enc;
           in_msg.data3 => int val;
+
           if (group == 0) { // grids
             if (enc == 0) { val => grids.x; }
             else if (enc == 1) { val => grids.y; }
@@ -102,10 +122,26 @@ public class SC4 {
             else { renoise_out.send(in_msg); } // attack, decay
           }
           else if (group == 4) { // euclid
-            if (enc == 0) { (32*val/127)$int => bass.euclid.offset; } // TODO center
-            else if (enc == 1) { (32*val/127)$int => synth.euclid.offset; } // TODO center
-            else if (enc == 4) { (32*val/127)$int => bass.euclid.pulses; bass.euclid.update(); }
-            else if (enc == 5) { (32*val/127)$int => synth.euclid.pulses; synth.euclid.update(); }
+            if (enc == 0) { (32*(val-64)/64)$int => bass.euclid.offset; }
+            else if (enc == 1) { (32*(val-64)/64)$int => synth.euclid.offset; }
+            else if (enc == 4) {
+              if (val > 32) {
+                32 => val;
+                val => in_msg.data3;
+                out.send(in_msg);
+              }
+              val => bass.euclid.pulses;
+              bass.euclid.update();
+            }
+            else if (enc == 5) {
+              if (val > 32) {
+                32 => val;
+                val => in_msg.data3;
+                out.send(in_msg);
+              }
+              val => synth.euclid.pulses;
+              synth.euclid.update();
+            }
             // TODO set global scales
             else { renoise_out.send(in_msg); } // pass to renoise
           }
@@ -144,15 +180,17 @@ public class SC4 {
               }
             }
           }
-/*
-          else if (group > 11 && group < 16) { // euclid buttons
-
-            if (enc == 4) {
-              if (val == 127) { 1 => euclid.note_rec; }
-              else if (val == 0) { 0 => euclid.note_rec; }
+          else if (group == 13) {
+            if (in_msg.data3 == 127) {
+              if (enc < 4) { true => bass.arp.mutes[enc]; }
+              else { true => synth.arp.mutes[enc-4]; }
+            }
+            else if (in_msg.data3 == 0) {
+              if (enc < 4) { false => bass.arp.mutes[enc]; }
+              else { false => synth.arp.mutes[enc-4]; }
             }
           }
-*/
+          //else { <<< group >>>; }
 
         }
       }
