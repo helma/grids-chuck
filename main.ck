@@ -1,13 +1,19 @@
 Grids grids;
-Euclid euclid;
-
-SC4 sc4;
-grids @=> sc4.grids;
-euclid @=> sc4.euclid;
+EuclidArp bass;
+6 => bass.channel;
+EuclidArp synth;
+7 => synth.channel;
 
 Renoise renoise;
 grids @=> renoise.grids;
-euclid @=> renoise.euclid;
+bass @=> renoise.bass;
+synth @=> renoise.synth;
+
+SC4 sc4;
+grids @=> sc4.grids;
+bass @=> sc4.bass;
+synth @=> sc4.synth;
+renoise.out @=> sc4.renoise_out;
 
 spork ~ sc4.sc4();
 renoise.sync();

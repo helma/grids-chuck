@@ -373,13 +373,13 @@ public class Grids {
   0 => int randomness;
   //0 => int step;
 
-  [0,50,50] @=>  int densities[];
+  [0,0,0] @=>  int densities[];
   [0,0,0] @=>  int accent_samples[];
   [0,0,0] @=>  int accent_keys[];
   [100,100,100] @=>  int accent_velocities[];
   [3,3,3] @=>  int samples[];
   [0,0,0] @=>  int keys[];
-  [75,75,75] @=>  int velocities[];
+  [100,100,100] @=>  int velocities[];
 
   int lastghost[3];
   int lastaccent[3];
@@ -395,7 +395,9 @@ public class Grids {
     [Math.random2(0,randomness),Math.random2(0,randomness),Math.random2(0,randomness)] @=>  perturbations;
   }
 
-  fun MidiMsg[] read(int step) {
+  fun void play(int step, MidiOut out) {
+    step % steps_per_pattern => step;
+    // if (step == 0) { randomize(); } // At the beginning of a pattern, decide on perturbation levels.
 
     Math.floor(3*x/127)$int => int i;
     Math.floor(3*y/127)$int => int j;
@@ -404,13 +406,13 @@ public class Grids {
     255-xx => int xx_inv;          
     255-yy => int yy_inv;
 
-    MidiMsg notes[0];
+    MidiMsg msg;
     for (int inst;inst<3;inst++) {
-      (inst * steps_per_pattern) + step => int offset;
-      drum_map[i][j][offset] => int a;
-      drum_map[i+1][j][offset] => int b;
-      drum_map[i][j+1][offset] => int c;
-      drum_map[i+1][j+1][offset] => int d;
+      (inst * steps_per_pattern) + step => int msgset;
+      drum_map[i][j][msgset] => int a;
+      drum_map[i+1][j][msgset] => int b;
+      drum_map[i][j+1][msgset] => int c;
+      drum_map[i+1][j+1][msgset] => int d;
       (xx*b + xx_inv*a)/255 => int ab;
       (xx*d + xx_inv*c)/255 => int cd;
       (yy * cd + yy_inv * ab)/255 => int level;    
@@ -424,32 +426,27 @@ public class Grids {
       }
       if (level > 255-densities[inst]) {
         if (level > 192) { // accent
-          MidiMsg off;
-          0x80+2*i => off.data1;
-          lastaccent[i] => off.data2;
-          0 => off.data3;
-          notes << off;
-          MidiMsg msg;
+          0x80+2*i => msg.data1;
+          lastaccent[i] => msg.data2;
+          0 => msg.data3;
+          out.send(msg);
           0x90+2*inst => msg.data1;
           accent_samples[inst]*24+24+accent_keys[inst] => msg.data2;
           accent_velocities[inst] => msg.data3;
-          notes << msg;
+          out.send(msg);
           msg.data2 => lastaccent[i];
         } // ghost
-        MidiMsg off;
-        0x80+2*inst+1 => off.data1;
-        lastghost[i] => off.data2;
-        0 => off.data3;
-        notes << off;
-        MidiMsg msg;
+        0x80+2*inst+1 => msg.data1;
+        lastghost[i] => msg.data2;
+        0 => msg.data3;
+        out.send(msg);
         0x90+2*inst+1 => msg.data1;
         samples[inst]*24+24+keys[inst] => msg.data2;
         velocities[inst] => msg.data3;
-        notes << msg;
+        out.send(msg);
         msg.data2 => lastghost[i];
       }
     }
-    return notes;
   }
 
 }

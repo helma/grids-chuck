@@ -6,8 +6,11 @@ public class SC4 {
   if (!in.open(name)) {<<< "Cannot open ",name >>>; me.exit();}
   MidiOut out;
   if (!out.open(name)) {<<< "Cannot open ",name >>>; me.exit();}
+
   Grids grids;
-  Euclid euclid;
+  EuclidArp bass;
+  EuclidArp synth;
+  MidiOut renoise_out;
 
   // SC4 init
 
@@ -41,19 +44,19 @@ public class SC4 {
     // attack
     (i+1)*8+1 => msg.data2;
     0 => msg.data3;
-    //renoise_out.send(msg);
+    renoise_out.send(msg);
     out.send(msg);
     (i+1)*8+5 => msg.data2;
-    //renoise_out.send(msg);
+    renoise_out.send(msg);
     out.send(msg);
 
     // decay
     (i+1)*8+2 => msg.data2;
     32 => msg.data3;
-    //renoise_out.send(msg);
+    renoise_out.send(msg);
     out.send(msg);
     (i+1)*8+6 => msg.data2;
-    //renoise_out.send(msg);
+    renoise_out.send(msg);
     out.send(msg);
 
     // velocities
@@ -88,49 +91,31 @@ public class SC4 {
           if (group == 0) { // grids
             if (enc == 0) { val => grids.x; }
             else if (enc == 1) { val => grids.y; }
-            else if (enc == 2) { val*2 => grids.randomness; }
+            else if (enc == 2) { val*2 => grids.randomness; grids.randomize(); }
             else if (enc > 3 && enc < 7) { val*2 => grids.densities[enc-4]; }
+            else { renoise_out.send(in_msg); } // pass to renoise
           }
-          else if (group == 1) { // kick
-            if (enc == 0) { Math.round(23*val/127-12)$int => grids.accent_keys[0]; }
-            //else if (enc < 3) { renoise_out.send(in_msg); } // attack, decay
-            else if (enc == 3) { val => grids.accent_velocities[0]; }
-            else if (enc == 4) { Math.round(23*val/127-12)$int => grids.keys[0]; }
-            //else if (enc < 7) { renoise_out.send(in_msg); }
-            else if (enc == 7) { val => grids.velocities[0]; }
+          else if (group < 4) { // grids
+            group - 1 => int i;
+            if (enc == 0) { Math.round(23*val/127-12)$int => grids.accent_keys[i]; }
+            else if (enc == 4) { Math.round(23*val/127-12)$int => grids.keys[i]; }
+            else { renoise_out.send(in_msg); } // attack, decay
           }
-          else if (group == 2) { // snr
-            if (enc == 0) { Math.round(23*val/127-12)$int => grids.accent_keys[1]; }
-            //else if (enc < 3) { renoise_out.send(in_msg); }
-            else if (enc == 3) { val => grids.accent_velocities[1]; }
-            else if (enc == 4) { Math.round(23*val/127-12)$int => grids.keys[1]; }
-            //else if (enc < 7) { renoise_out.send(in_msg); }
-            else if (enc == 7) { val => grids.velocities[1]; }
+          else if (group == 4) { // euclid
+            if (enc == 0) { (32*val/127)$int => bass.euclid.offset; } // TODO center
+            else if (enc == 1) { (32*val/127)$int => synth.euclid.offset; } // TODO center
+            else if (enc == 4) { (32*val/127)$int => bass.euclid.pulses; bass.euclid.update(); }
+            else if (enc == 5) { (32*val/127)$int => synth.euclid.pulses; synth.euclid.update(); }
+            // TODO set global scales
+            else { renoise_out.send(in_msg); } // pass to renoise
           }
-          else if (group == 3) { // hh
-            if (enc == 0) { Math.round(23*val/127-12)$int => grids.accent_keys[2]; }
-            //else if (enc < 3) { renoise_out.send(in_msg); }
-            else if (enc == 3) { val => grids.accent_velocities[2]; }
-            else if (enc == 4) { Math.round(23*val/127-12)$int => grids.keys[2]; }
-            //else if (enc < 7) { renoise_out.send(in_msg); }
-            else if (enc == 7) { val => grids.velocities[2]; }
+          else if (group == 5) { // arps
+            if (enc < 4) { val => bass.arp.notes[enc]; }
+            else if (enc < 8) { val => synth.arp.notes[enc-4]; }
           }
-          else if (group > 3 && group < 8) { // euclid
-            group-4 => int i;
-            if (enc == 0) {
-              (32*val/127)$int => euclid.pulses[i];
-              euclid.euclid(i);
-            }
-            else if (enc == 1) { (32*val/127)$int => euclid.offsets[i]; }
-            else if (enc == 2) { val => euclid.velocities[i]; }
-            else if (enc == 3) { val => euclid.durations[i]; }
-            else if (enc == 4) { val => euclid.lastnote[i]; }
-            else {
-              enc-4 => int n;
-              val => euclid.notes[i][n];
-            }
-          }
-          else if (group > 8 && group < 12) { // buttons
+          else if (group == 6) { renoise_out.send(in_msg); } // bass/synth
+          else if (group == 7) { renoise_out.send(in_msg); } // master
+          else if (group > 8 && group < 12) { // grids buttons
             if (val == 127) {
               group - 9 => int i;
               if (enc < 4) { // accent
@@ -159,13 +144,15 @@ public class SC4 {
               }
             }
           }
-          else if (group > 11 && group < 16) { // buttons
+/*
+          else if (group > 11 && group < 16) { // euclid buttons
 
             if (enc == 4) {
               if (val == 127) { 1 => euclid.note_rec; }
               else if (val == 0) { 0 => euclid.note_rec; }
             }
           }
+*/
 
         }
       }
