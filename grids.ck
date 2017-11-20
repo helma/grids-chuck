@@ -371,7 +371,6 @@ public class Grids {
   Math.random2(0,127) => int x;
   Math.random2(0,127) => int y;
   0 => int randomness;
-  //0 => int step;
 
   [0,0,0] @=>  int densities[];
   [0,0,0] @=>  int accent_samples[];
@@ -396,8 +395,8 @@ public class Grids {
   }
 
   fun void play(int step, MidiOut out) {
+
     step % steps_per_pattern => step;
-    // if (step == 0) { randomize(); } // At the beginning of a pattern, decide on perturbation levels.
 
     Math.floor(3*x/127)$int => int i;
     Math.floor(3*y/127)$int => int j;

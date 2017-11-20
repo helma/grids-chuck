@@ -11,6 +11,7 @@ public class SC4 {
   EuclidArp bass;
   EuclidArp synth;
   MidiOut renoise_out;
+  if (!renoise_out.open("Renoise MIDI In Port B")) {<<< "Cannot open 'Renoise MIDI In Port B'" >>>; me.exit();}
 
   // SC4 init
 
@@ -124,6 +125,8 @@ public class SC4 {
           else if (group == 4) { // euclid
             if (enc == 0) { (32*(val-64)/64)$int => bass.euclid.offset; }
             else if (enc == 1) { (32*(val-64)/64)$int => synth.euclid.offset; }
+            else if (enc == 2) { bass.arp.set_scale((bass.arp.sc.scales.cap()*val/127)$int ); }
+            else if (enc == 3) { (24*(val-64)/64)$int => bass.arp.transpose; }
             else if (enc == 4) {
               if (val > 32) {
                 32 => val;
@@ -142,6 +145,8 @@ public class SC4 {
               val => synth.euclid.pulses;
               synth.euclid.update();
             }
+            else if (enc == 6) { synth.arp.set_scale((synth.arp.sc.scales.cap()*val/127)$int ); }
+            else if (enc == 7) { (24*(val-64)/64)$int => synth.arp.transpose; }
             // TODO set global scales
             else { renoise_out.send(in_msg); } // pass to renoise
           }
@@ -180,7 +185,7 @@ public class SC4 {
               }
             }
           }
-          else if (group == 13) {
+          else if (group == 13) { // arp
             if (in_msg.data3 == 127) {
               if (enc < 4) { false => bass.arp.mutes[enc]; }
               else { false => synth.arp.mutes[enc-4]; }
@@ -190,7 +195,11 @@ public class SC4 {
               else { true => synth.arp.mutes[enc-4]; }
             }
           }
-          //else { <<< group >>>; }
+          else if (group == 15) { // mixer
+          //<<< in_msg.data1, in_msg.data2, in_msg.data3 >>>;
+            renoise_out.send(in_msg);
+          }
+          else { <<< group >>>; }
 
         }
       }

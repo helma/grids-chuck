@@ -13,7 +13,6 @@ SC4 sc4;
 grids @=> sc4.grids;
 bass @=> sc4.bass;
 synth @=> sc4.synth;
-renoise.out @=> sc4.renoise_out;
 
 spork ~ sc4.sc4();
 renoise.sync();

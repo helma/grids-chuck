@@ -2,7 +2,6 @@ public class EuclidArp {
 
   Arp arp;
   Euclid euclid;
-  32 => int steps;
   int channel;
   MidiMsg msg;
 

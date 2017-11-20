@@ -23,6 +23,8 @@ public class Scale {
 //new psuedo indian lydian mode
 [0, 2, 4, 6, 7, 9, 10] @=> int ind[];
 
+[min,har,asc,nea,maj,mixo,dor,lyd,pent,jewish,gypsy,arabic,ind] @=> int scales[][];
+
 //convenience for minor keys
 fun int[] minor(int deg) {
     if (deg == 4) return asc; //ascending
