@@ -416,8 +416,8 @@ public class Grids {
       (xx*d + xx_inv*c)/255 => int cd;
       (yy * cd + yy_inv * ab)/255 => int level;    
       // apply pertubation
-      if (level < 255 - perturbations[i]) {
-        level + perturbations[i] => level;
+      if (level < 255 - perturbations[inst]) {
+        level + perturbations[inst] => level;
       } else {
         // The sequencer from Anushri uses a weird clipping rule here. Comment
         // this line to reproduce its behavior.
@@ -425,25 +425,25 @@ public class Grids {
       }
       if (level > 255-densities[inst]) {
         if (level > 192) { // accent
-          0x80+2*i => msg.data1;
-          lastaccent[i] => msg.data2;
+          0x80+2*inst => msg.data1;
+          lastaccent[inst] => msg.data2;
           0 => msg.data3;
           out.send(msg);
           0x90+2*inst => msg.data1;
           accent_samples[inst]*24+24+accent_keys[inst] => msg.data2;
           accent_velocities[inst] => msg.data3;
           out.send(msg);
-          msg.data2 => lastaccent[i];
+          msg.data2 => lastaccent[inst];
         } // ghost
         0x80+2*inst+1 => msg.data1;
-        lastghost[i] => msg.data2;
+        lastghost[inst] => msg.data2;
         0 => msg.data3;
         out.send(msg);
         0x90+2*inst+1 => msg.data1;
         samples[inst]*24+24+keys[inst] => msg.data2;
         velocities[inst] => msg.data3;
         out.send(msg);
-        msg.data2 => lastghost[i];
+        msg.data2 => lastghost[inst];
       }
     }
   }

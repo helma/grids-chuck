@@ -118,8 +118,8 @@ public class SC4 {
           }
           else if (group < 4) { // grids
             group - 1 => int i;
-            if (enc == 0) { Math.round(23*val/127-12)$int => grids.accent_keys[i]; }
-            else if (enc == 4) { Math.round(23*val/127-12)$int => grids.keys[i]; }
+            if (enc == 0) { Math.round(23*val/127-12)$int => grids.keys[i]; }
+            else if (enc == 4) { Math.round(23*val/127-12)$int => grids.accent_keys[i]; }
             else { renoise_out.send(in_msg); } // attack, decay
           }
           else if (group == 4) { // euclid
@@ -159,8 +159,8 @@ public class SC4 {
           else if (group > 8 && group < 12) { // grids buttons
             if (val == 127) {
               group - 9 => int i;
-              if (enc < 4) { // accent
-                enc => grids.accent_samples[i];
+              if (enc < 4) {  // ghost
+                enc => grids.samples[i];
                 for (0=>int j;j<4;j++) {
                   if (j != enc) { // turn leds off
                     MidiMsg msg;
@@ -171,8 +171,8 @@ public class SC4 {
                   }
                 }
               }
-              else { // ghost
-                enc-4 => grids.samples[i];
+              else { // accent
+                enc-4 => grids.accent_samples[i];
                 for (0=>int j;j<4;j++) {
                   if (j != enc-4) { // turn leds off
                     MidiMsg msg;
